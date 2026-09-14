@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/url"
+	"strconv"
 	"time"
 )
 
@@ -224,9 +225,17 @@ func (d *Dialer) connect(ctx context.Context, conn net.Conn, cmd Command, addres
 			return nil, err
 		}
 
-		proxyIP, proxyPort, err := splitHostPort(addr.String())
+		proxyHost, proxyPort, err := splitHostPort(addr.String())
 		if err != nil {
 			return nil, err
+		}
+		if ip := net.ParseIP(proxyHost); ip != nil && ip.IsUnspecified() {
+			// The server replied the unspecified address, it is usually behind
+			// NAT, so use the address the client connected to instead.
+			proxyHost, _, err = net.SplitHostPort(d.ProxyAddress)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		udpConn, err := d.proxyPacketDial(ctx, "udp", ":0")
@@ -238,9 +247,9 @@ func (d *Dialer) connect(ctx context.Context, conn net.Conn, cmd Command, addres
 			IP:   net.ParseIP(targetIP),
 			Port: targetPort,
 		}
-		proxyAddr := &net.UDPAddr{
-			IP:   net.ParseIP(proxyIP),
-			Port: proxyPort,
+		proxyAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(proxyHost, strconv.Itoa(proxyPort)))
+		if err != nil {
+			return nil, err
 		}
 		wrapConn, err := NewUDPConn(udpConn, proxyAddr, targetAddr)
 		if err != nil {

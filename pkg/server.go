@@ -810,7 +810,34 @@ func defaultReplyPacketForwardAddress(ctx context.Context, destinationAddr strin
 	if !ok {
 		return nil, 0, fmt.Errorf("connect to %v failed: local address is %s://%s", destinationAddr, tcpLocal.Network(), tcpLocal.String())
 	}
+
+	// The local address is an internal address when the server is behind NAT,
+	// for example a cloud server with an elastic public IP, in that case the
+	// client cannot reach it. Reply the unspecified address instead, so that
+	// the client uses the address it connected to.
+	if !isPublicIP(tcpLocalAddr.IP) {
+		if tcpLocalAddr.IP.To4() != nil {
+			return net.IPv4zero, udpLocalAddr.Port, nil
+		}
+		return net.IPv6unspecified, udpLocalAddr.Port, nil
+	}
 	return tcpLocalAddr.IP, udpLocalAddr.Port, nil
+}
+
+// isPublicIP reports whether the IP is a globally routable address which can be
+// reached by the client. It returns false for private, shared, loopback,
+// link-local and unspecified addresses.
+func isPublicIP(ip net.IP) bool {
+	if ip == nil || !ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLinkLocalUnicast() {
+		return false
+	}
+	if ip4 := ip.To4(); ip4 != nil {
+		// 100.64.0.0/10 (RFC 6598 shared address space)
+		if ip4[0] == 100 && ip4[1]&0xc0 == 64 {
+			return false
+		}
+	}
+	return true
 }
 
 type reserveListen struct {

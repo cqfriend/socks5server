@@ -16,6 +16,11 @@ IPv4 / IPv6 / 域名均可使用。
 
 ## 构建
 
+./build.sh                              # 6 个平台 + 本机版本
+PLATFORMS="linux/amd64" ./build.sh      # 只编译指定平台
+GARBLE=0 ./build.sh                     # 关闭 garble 混淆编译
+
+
 ```bash
 # 交叉编译全部平台（linux/darwin/windows × amd64/arm64）+ 本机版本
 ./build.sh
@@ -127,6 +132,17 @@ Examples:
 | `associate` | ✅ | ❌ 回 `0x07 Command not supported` |
 | `uot` | ❌ 回 `0x07 Command not supported` | ✅ |
 | `off` | ❌ | ❌ |
+
+### 云服务器 / NAT 场景
+
+部署在云服务器或 NAT 后面时，服务器只能看到自己的内网地址（如 `10.0.0.13`），
+而客户端是通过公网地址连进来的，直接把内网地址作为 `BND.ADDR` 返回会导致客户端连不上。
+
+因此当监听到的本机地址不是公网地址时，UDP ASSOCIATE 的 `BND.ADDR` 会返回未指定地址
+`0.0.0.0`（IPv6 为 `::`），客户端应改用自己连接代理时使用的地址 ——
+mihomo、sing-box、Xray 以及本项目的客户端都已按此处理。
+
+如需强制指定对外通告的地址，可以设置 `Server.PacketForwardAddress`。
 
 ## 作为库使用
 
