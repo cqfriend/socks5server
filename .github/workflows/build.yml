@@ -1,0 +1,90 @@
+name: Build & Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "发布 tag（如 v1.0.0），留空则只编译不发布"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # 需要完整历史，build.sh 里用 git describe 生成版本号
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          # 项目无第三方依赖，无需缓存
+          cache: false
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build
+        env:
+          # CI 不装 garble，保证构建可复现；本地如需混淆用 ./build.sh
+          GARBLE: "0"
+        run: bash ./build.sh
+
+      - name: Collect release assets
+        run: |
+          set -e
+          mkdir -p dist/release
+          for dir in dist/socks5_*; do
+            platform="${dir#dist/socks5_}"
+            platform="${platform//_/-}"
+            ext=""
+            if [ -f "$dir/socks5.exe" ]; then
+              ext=".exe"
+            fi
+            cp "$dir/socks5${ext}" "dist/release/socks5-${platform}${ext}"
+          done
+          cd dist/release
+          sha256sum socks5-* > checksums.txt
+          ls -lh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: socks5-binaries
+          path: dist/release/*
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.tag != '')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+            TARGET="--target ${{ github.sha }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+            TARGET=""
+          fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG 已存在，追加/覆盖产物"
+            gh release upload "$TAG" dist/release/* --clobber
+          else
+            echo "创建 Release $TAG"
+            # shellcheck disable=SC2086
+            gh release create "$TAG" --title "$TAG" --generate-notes ${TARGET} dist/release/*
+          fi

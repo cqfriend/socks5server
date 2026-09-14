@@ -5,6 +5,8 @@
 *.so
 *.dylib
 socks5
+# Build output
+/dist/
 # Test binary, built with `go test -c`
 *.test
 

@@ -15,6 +15,13 @@ var (
 	username string
 	password string
 	udp      string
+	showVer  bool
+
+	// These are set by the build script with -ldflags.
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+	builtBy = "unknown"
 )
 
 func init() {
@@ -22,6 +29,7 @@ func init() {
 	flag.StringVar(&username, "u", "", "username")
 	flag.StringVar(&password, "p", "", "password")
 	flag.StringVar(&udp, "udp", "all", "udp mode: all, associate, uot, off")
+	flag.BoolVar(&showVer, "v", false, "show version information")
 	flag.Usage = usage
 	flag.Parse()
 }
@@ -55,6 +63,11 @@ Examples:
 }
 
 func main() {
+	if showVer {
+		fmt.Printf("socks5 %s (commit %s, built %s by %s)\n", version, commit, date, builtBy)
+		return
+	}
+
 	mode, err := parseUDPMode(udp)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

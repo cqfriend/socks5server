@@ -17,8 +17,47 @@ IPv4 / IPv6 / 域名均可使用。
 ## 构建
 
 ```bash
+# 交叉编译全部平台（linux/darwin/windows × amd64/arm64）+ 本机版本
+./build.sh
+
+# 只编译指定平台
+PLATFORMS="linux/amd64" ./build.sh
+
+# 关闭 garble 混淆编译
+GARBLE=0 ./build.sh
+```
+
+产物：
+
+- `dist/socks5_<os>_<arch>/socks5[.exe]`
+- `./socks5`（本机版本，可直接运行）
+
+也可以直接使用 Go：
+
+```bash
 go build -o socks5 .
 ```
+
+## 发布
+
+推送 `v*` 形式的 tag 即可触发 GitHub Actions 自动交叉编译并创建 Release：
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+也可以在 Actions 页面手动触发 `Build & Release` 工作流，并填写要发布的 tag。
+
+Release 产物：
+
+- `socks5-linux-amd64` / `socks5-linux-arm64`
+- `socks5-darwin-amd64` / `socks5-darwin-arm64`
+- `socks5-windows-amd64.exe` / `socks5-windows-arm64.exe`
+- `checksums.txt`
+
+工作流的触发条件为：push 到 `main`、提交 PR、推送 `v*` tag、手动触发。
+其中只有 tag（或手动填写 tag）会创建 Release，其余情况仅编译并上传构建产物（Actions Artifacts）。
 
 ## 命令行用法
 
@@ -41,6 +80,7 @@ Options:
         username
   -udp string
         udp mode: all, associate, uot, off (default "all")
+  -v    show version information
 
 UDP modes (-udp):
   all        accept the UDP ASSOCIATE command and UDP over TCP (default)
@@ -64,6 +104,7 @@ Examples:
 | `-u` | 用户名，留空表示不鉴权 | 空 |
 | `-p` | 密码，仅当 `-u` 非空时生效 | 空 |
 | `-udp` | UDP 模式：`all` / `associate` / `uot` / `off` | `all` |
+| `-v` | 显示版本信息 | 关 |
 
 示例：
 
@@ -181,7 +222,10 @@ conn, err := d.Dial("udp", "8.8.8.8:53")
 
 ```
 .
+├── .github/workflows
+│   └── build.yml      # GitHub Actions 云编译与自动发布
 ├── main.go            # 命令行入口
+├── build.sh           # 交叉编译脚本
 ├── go.mod
 └── pkg
     ├── server.go      # SOCKS5 服务端
